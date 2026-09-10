@@ -30,7 +30,8 @@ export async function ensureIncident(id = "042") {
       latestFindings: [], hypotheses: [], openActions: [], humanDecisions: [], contextVersion: 1,
     };
     mem.set(id, ctx);
-    await db.insert(incidents).values({ id, incidentCode: `INC-${id}`, facilityId: "fac-sentinel-7", facility: ctx.facility, title: "SIMULATED DRONE INTRUSION", status: ctx.status, phase: ctx.phase, severity: "UNKNOWN", contextVersion: 1, sharedContext: ctx });
+    const now = new Date();
+    await db.insert(incidents).values({ id, incidentCode: `INC-${id}`, facilityId: "fac-sentinel-7", facility: ctx.facility, title: "SIMULATED DRONE INTRUSION", type: "DRONE_INTRUSION", status: ctx.status, phase: ctx.phase, severity: "UNKNOWN", outcome: null, contextVersion: 1, sharedContext: ctx, summary: null, createdBy: null, startedAt: now, resolvedAt: null, createdAt: now, updatedAt: now });
     await db.insert(timeline).values({ id: randomUUID(), incidentId: id, eventType: "INCIDENT_CREATED", kind: "incident_created", label: `Incident #${id} created`, contextVersion: 1, actorType: "SYSTEM" });
     await db.insert(incidentEvents).values({ id: randomUUID(), incidentId: id, eventType: "INCIDENT_CREATED", kind: "incident_created", label: `Incident #${id} created`, contextVersion: 1, actorType: "SYSTEM" }).catch(() => {});
     return ctx;
@@ -66,21 +67,22 @@ export async function applyEvent(id: string, type: string, payload: Record<strin
 
   const { db } = await getDb();
   const eid = randomUUID();
-  await db.insert(events).values({ id: eid, incidentId: id, type, payload, source: String(payload.source ?? "SIMULATOR"), contextVersion: nextVersion });
-  await db.insert(timeline).values({ id: randomUUID(), incidentId: id, eventType: "SIMULATION_EVENT", kind: "simulation_event", label: `${type}`, refId: eid, contextVersion: nextVersion, actorType: "SIMULATOR" });
+  const now2 = new Date();
+  await db.insert(events).values({ id: eid, incidentId: id, type, payload, source: String(payload.source ?? "SIMULATOR"), contextVersion: nextVersion, sequenceNumber: nextVersion, occurredAt: now2, createdAt: now2 });
+  await db.insert(timeline).values({ id: randomUUID(), incidentId: id, eventType: "SIMULATION_EVENT", kind: "simulation_event", label: `${type}`, refId: eid, refType: "event", contextVersion: nextVersion, actorType: "SIMULATOR", actorId: "simulator", eventId: eid, createdAt: now2 });
   if (material) {
-    await db.insert(timeline).values({ id: randomUUID(), incidentId: id, eventType: "CONTEXT_UPDATED", kind: "context_updated", label: `Context v${nextVersion}`, contextVersion: nextVersion, actorType: "SYSTEM" });
+    await db.insert(timeline).values({ id: randomUUID(), incidentId: id, eventType: "CONTEXT_UPDATED", kind: "context_updated", label: `Context v${nextVersion}`, contextVersion: nextVersion, actorType: "SYSTEM", actorId: "system", createdAt: now2 });
   }
   // persist snapshot
   const { incidents: inc } = await import("../db/schema");
   await db.update(inc).set({ contextVersion: nextVersion, sharedContext: { ...ctx }, updatedAt: new Date() }).where(eq(inc.id, id));
   if ((payload.text as string) && type !== "DETECTION_CONFIDENCE_CHANGED") {
-    await db.insert(observations).values({ id: randomUUID(), incidentId: id, sourceType: ((payload.source as string) ?? "SIMULATOR"), source: ((payload.source as string) ?? "SIMULATOR"), text: (payload.text as string), contextVersion: nextVersion, eventId: eid });
+    await db.insert(observations).values({ id: randomUUID(), incidentId: id, sourceType: ((payload.source as string) ?? "SIMULATOR"), source: ((payload.source as string) ?? "SIMULATOR"), text: (payload.text as string), confidence: null, eventId: eid, contextVersion: nextVersion, createdAt: now2, createdBy: null });
   }
   // Pseudo-sensor event for confidence changes
   if (type === "DETECTION_CONFIDENCE_CHANGED" && payload.confidence !== undefined) {
     const { sensorEvents } = await import("../db/schema");
-    await db.insert(sensorEvents).values({ id: randomUUID(), incidentId: id, type: "DETECTION_CONFIDENCE", value: String(payload.confidence), unit: "PERCENT", confidence: payload.confidence as number, eventId: eid }).catch(() => {});
+    await db.insert(sensorEvents).values({ id: randomUUID(), incidentId: id, type: "DETECTION_CONFIDENCE", value: String(payload.confidence), unit: "PERCENT", confidence: payload.confidence as number, metadata: {}, eventId: eid, createdAt: now2 }).catch(() => {});
   }
   return { ctx, version: nextVersion, material };
 }
