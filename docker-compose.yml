@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mission_room_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mission
+      POSTGRES_PASSWORD: mission
+      POSTGRES_DB: mission_room
+    ports:
+      - "5432:5432" # If host Postgres already on 5432 (e.g. native postgres.exe PID 8532), change to "5433:5432" and use DATABASE_URL=postgres://mission:mission@localhost:5433/mission_room
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mission -d mission_room"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

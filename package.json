@@ -8,6 +8,8 @@
     "start": "next start",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
     "db:seed": "tsx lib/db/seed.ts",
     "moss:ingest": "tsx lib/moss/ingest.ts",
     "moss:test": "tsx lib/moss/test.ts"

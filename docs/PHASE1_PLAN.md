@@ -60,9 +60,9 @@ Disagreement banner + INFORMATION NEEDED → human input → reassess → safe c
 - [ ] No invented incidents, no fake latency, fail-closed banners work.
 - [ ] All files under Y:\drone_war; no secrets committed (.env.example only).
 
-## Open tech choices (need user)
+## Open tech choices (resolved)
 
-- ORM: Prisma vs Drizzle (default proposal: Prisma + Docker Postgres).
+- ORM: Drizzle + PGlite (dev, zero-setup, no Docker) / Postgres via DATABASE_URL (prod/Docker). See lib/db/client.ts:13-21, drizzle.config.ts:8, docker-compose.yml. Default is A (PGlite); B (Docker Postgres) is optional via `npm run db:up`.
 - LLM: reuse opencode auth model vs explicit OPENAI/ANTHROPIC key.
 - Moss: endpoint/key/collection vs interface-first with Postgres FTS interim.
 - UI: minimal debug page first vs full roster layout stub.
