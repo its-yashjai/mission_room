@@ -34,7 +34,7 @@ export async function investigate(incidentId = "042", agents: AgentName[] = ["in
 
   if (failed.length > 0) {
     const { db } = await getDb();
-    await db.insert(timeline).values({ id: randomUUID(), incidentId, kind: "agent_started", label: `${failed.length} agent(s) unavailable (AI analysis unavailable)`, contextVersion: version });
+    await db.insert(timeline).values({ id: randomUUID(), incidentId, eventType: "AGENT_FAILED", kind: "agent_started", label: `${failed.length} agent(s) unavailable (AI analysis unavailable)`, contextVersion: version, actorType: "SYSTEM" });
   }
   return { version, results: ok.map((o) => o.finding), failed: failed.length };
 }

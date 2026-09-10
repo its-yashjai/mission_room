@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { getDb, initDb } from "../db/client";
-import { incidents, events, observations, timeline } from "../db/schema";
+import { incidents, events, observations, timeline, incidentEvents } from "../db/schema";
 import { eq } from "drizzle-orm";
 
 export type SharedContext = {
@@ -30,8 +30,9 @@ export async function ensureIncident(id = "042") {
       latestFindings: [], hypotheses: [], openActions: [], humanDecisions: [], contextVersion: 1,
     };
     mem.set(id, ctx);
-    await db.insert(incidents).values({ id, facility: ctx.facility, title: "SIMULATED DRONE INTRUSION", status: ctx.status, phase: ctx.phase, severity: "UNKNOWN", contextVersion: 1, sharedContext: ctx });
-    await db.insert(timeline).values({ id: randomUUID(), incidentId: id, kind: "incident_created", label: `Incident #${id} created`, contextVersion: 1 });
+    await db.insert(incidents).values({ id, incidentCode: `INC-${id}`, facilityId: "fac-sentinel-7", facility: ctx.facility, title: "SIMULATED DRONE INTRUSION", status: ctx.status, phase: ctx.phase, severity: "UNKNOWN", contextVersion: 1, sharedContext: ctx });
+    await db.insert(timeline).values({ id: randomUUID(), incidentId: id, eventType: "INCIDENT_CREATED", kind: "incident_created", label: `Incident #${id} created`, contextVersion: 1, actorType: "SYSTEM" });
+    await db.insert(incidentEvents).values({ id: randomUUID(), incidentId: id, eventType: "INCIDENT_CREATED", kind: "incident_created", label: `Incident #${id} created`, contextVersion: 1, actorType: "SYSTEM" }).catch(() => {});
     return ctx;
   }
   const row = rows[0] as unknown as { sharedContext: SharedContext; contextVersion: number };
@@ -65,16 +66,21 @@ export async function applyEvent(id: string, type: string, payload: Record<strin
 
   const { db } = await getDb();
   const eid = randomUUID();
-  await db.insert(events).values({ id: eid, incidentId: id, type, payload, contextVersion: nextVersion });
-  await db.insert(timeline).values({ id: randomUUID(), incidentId: id, kind: "simulation_event", label: `${type}`, refId: eid, contextVersion: nextVersion });
+  await db.insert(events).values({ id: eid, incidentId: id, type, payload, source: String(payload.source ?? "SIMULATOR"), contextVersion: nextVersion });
+  await db.insert(timeline).values({ id: randomUUID(), incidentId: id, eventType: "SIMULATION_EVENT", kind: "simulation_event", label: `${type}`, refId: eid, contextVersion: nextVersion, actorType: "SIMULATOR" });
   if (material) {
-    await db.insert(timeline).values({ id: randomUUID(), incidentId: id, kind: "context_updated", label: `Context v${nextVersion}`, contextVersion: nextVersion });
+    await db.insert(timeline).values({ id: randomUUID(), incidentId: id, eventType: "CONTEXT_UPDATED", kind: "context_updated", label: `Context v${nextVersion}`, contextVersion: nextVersion, actorType: "SYSTEM" });
   }
   // persist snapshot
   const { incidents: inc } = await import("../db/schema");
   await db.update(inc).set({ contextVersion: nextVersion, sharedContext: { ...ctx }, updatedAt: new Date() }).where(eq(inc.id, id));
   if ((payload.text as string) && type !== "DETECTION_CONFIDENCE_CHANGED") {
-    await db.insert(observations).values({ id: randomUUID(), incidentId: id, source: ((payload.source as string) ?? "SIMULATOR"), text: (payload.text as string), contextVersion: nextVersion });
+    await db.insert(observations).values({ id: randomUUID(), incidentId: id, sourceType: ((payload.source as string) ?? "SIMULATOR"), source: ((payload.source as string) ?? "SIMULATOR"), text: (payload.text as string), contextVersion: nextVersion, eventId: eid });
+  }
+  // Pseudo-sensor event for confidence changes
+  if (type === "DETECTION_CONFIDENCE_CHANGED" && payload.confidence !== undefined) {
+    const { sensorEvents } = await import("../db/schema");
+    await db.insert(sensorEvents).values({ id: randomUUID(), incidentId: id, type: "DETECTION_CONFIDENCE", value: String(payload.confidence), unit: "PERCENT", confidence: payload.confidence as number, eventId: eid }).catch(() => {});
   }
   return { ctx, version: nextVersion, material };
 }
